@@ -1,0 +1,499 @@
+> # The next sets the number of simulations to do.
+> # It is set to 2 for illustration purposes
+> nsims <- 20
+> 
+> library(ergm)
+Loading required package: network
+network: Classes for Relational Data
+Version 1.17.0-585 created on 2020-10-08.
+copyright (c) 2005, Carter T. Butts, University of California-Irvine
+                    Mark S. Handcock, University of California -- Los Angeles
+                    David R. Hunter, Penn State University
+                    Martina Morris, University of Washington
+                    Skye Bender-deMoll, University of Washington
+ For citation information, type citation("network").
+ Type help("network-package") to get started.
+
+
+Attaching package: ‘ergm’
+
+The following objects are masked from ‘package:network’:
+
+    as.edgelist, mixingmatrix
+
+> 
+> model.f <- as.formula(g ~ edges + gwesp(alpha.mle,fixed=TRUE)+
++                       nodecov("seniority") +
++                       nodecov("practice") + match("practice") + 
++                       match("gender") + 
++                       match("office"))
+> #
+> # Lazega's lawyers mutual collaboration network
+> #
+> 
+> # Next for fit to original data
+> load(file="lazega.fit.RData")
+> # Next for fit to increased transitivity version
+> #load(file="lazega.fit.high.RData")
+> 
+> theta0.mle <- work.fit$coef
+> theta0.mcmc <- work.fit$MCMCtheta
+> 
+> alpha.mle
+gwesp.alpha 
+  0.7781267 
+> theta0.mle
+             edges              gwesp nodemain.seniority  nodemain.practice 
+       -6.50569466         0.89705453         0.02369035         0.41000125 
+nodematch.practice   nodematch.gender   nodematch.office 
+        0.75893446         0.70167722         1.14500227 
+> theta0.mcmc
+             edges              gwesp nodemain.seniority  nodemain.practice 
+       -6.50697231         0.89759695         0.02369328         0.40965773 
+nodematch.practice   nodematch.gender   nodematch.office 
+        0.75878012         0.70252441         1.14452022 
+> #
+> # Make curved.parms
+> #
+> g <- work.fit$network
+> trms <- ergm.getterms(model.f)
+> xobs0<-summary.statistics.network(model.f)
+> xobs0
+                        edges gwesp.fixed.0.778126694491321 
+                     115.0000                      190.3083 
+            nodecov.seniority              nodecov.practice 
+                    4687.0000                      129.0000 
+           nodematch.practice              nodematch.gender 
+                      72.0000                       99.0000 
+             nodematch.office 
+                      85.0000 
+> model.f
+g ~ edges + gwesp(alpha.mle, fixed = TRUE) + nodecov("seniority") + 
+    nodecov("practice") + match("practice") + match("gender") + 
+    match("office")
+> g <- try(as.network(eval(trms[[2]],sys.parent())))                  
+> m <- ergm.getmodel(model.f, g, drop=FALSE)
+> Clist <- ergm.Cprepare(g, m)                                            
+> m.expanded <- ergm.getmodel(model.f, g, drop=FALSE, expanded=TRUE)    
+> Clist.expanded <- ergm.Cprepare(g, m.expanded)                
+> ecurved <- ergm.curved(theta0.mle,m,m.expanded,g,NULL)
+> 
+> statsmatrix <- work.fit$sample
+> #
+> sm <- statsmatrix
+> print(apply(sm,2,summary.statsmatrix.ergm),scipen=7)
+                     edges        gwesp nodemain.seniority nodemain.practice
+Min.          -84.00000000 -171.3937471       -3617.000000      -97.00000000
+1st Qu.       -11.00000000  -25.3770063        -474.000000      -12.00000000
+Median          0.00000000    0.3465576          24.000000        1.00000000
+Mean            0.01935333    0.0621285           1.084367       -0.01812667
+3rd Qu.        12.00000000   25.9406394         498.000000       12.00000000
+Max.           66.00000000  157.7597916        2785.000000       66.00000000
+std. err.       0.04392000    0.0978500           1.857620        0.04611000
+std. t units.   0.44062000    0.6349200           0.583740       -0.39314000
+p.value dev.    0.65949000    0.5254800           0.559400        0.69421000
+std. dev.      17.01140000   37.8978400         719.452570       17.85714000
+              nodematch.practice nodematch.gender nodematch.office
+Min.               -53.000000000     -74.00000000    -61.000000000
+1st Qu.             -7.000000000     -10.00000000     -9.000000000
+Median               0.000000000       0.00000000      0.000000000
+Mean                 0.007133333       0.03758667      0.001213333
+3rd Qu.              7.000000000      11.00000000      9.000000000
+Max.                46.000000000      60.00000000     51.000000000
+std. err.            0.028450000       0.04026000      0.033750000
+std. t units.        0.250760000       0.93360000      0.035950000
+p.value dev.         0.802000000       0.35051000      0.971320000
+std. dev.           11.017620000      15.59265000     13.069910000
+> pdf(file="lazega.mle.pdf")
+> #
+> source("lazega.llik.r")
+> #
+> # Calculate the MLEs
+> #
+> lmle <- array(NA,dim=c(nsims,6*length(theta0.mle)+3,2))
+> isim <- round(seq(from=1, to=nrow(sm), length=nsims))
+> dimnames(lmle) <- list(NULL,c("llratio",
++                        names(theta0.mle),
++                        paste("se",names(theta0.mle),sep="."),
++                        paste("mv",names(theta0.mle),sep="."),
++                        paste("mv.se",names(theta0.mle),sep="."),
++                        "mahalanobis", "mv.mahalanobis",       
++                        paste("obs",names(theta0.mle),sep="."),
++                        paste("obs0",names(theta0.mle),sep=".")
++                              ),
++                        c("MLE","MPLE"))
+> l0<-ergm.estimate(model=m, theta0=theta0.mcmc, statsmatrix=sm,
++                   parms.curved=ecurved$parms.curved, calc.mcmc.se=F)
+the log-likelihood improved by < 0.0001 
+> print(l0$coef)
+             edges              gwesp nodemain.seniority  nodemain.practice 
+       -6.50697231         0.89759695         0.02369328         0.40965773 
+nodematch.practice   nodematch.gender   nodematch.office 
+        0.75878012         0.70252441         1.14452022 
+> print(xobs0)
+                        edges gwesp.fixed.0.778126694491321 
+                     115.0000                      190.3083 
+            nodecov.seniority              nodecov.practice 
+                    4687.0000                      129.0000 
+           nodematch.practice              nodematch.gender 
+                      72.0000                       99.0000 
+             nodematch.office 
+                      85.0000 
+> ll0 <- llikratio(theta=l0$coef, theta0=theta0.mcmc, statsmatrix=sm)
+> 
+> times<-NULL 
+> for( i in (1:(nsims))){
++  g <- lsim$networks[[i]]
++  xobs <- summary.statistics.network(model.f)
++  print(xobs)
++  t1<-proc.time()
++  fitmple<-ergm(model.f, MPLEonly=TRUE, algorithm.control=list(drop=FALSE))
++  t2<-proc.time()
++  if(all(xobs>0) & xobs["edges"] > 10){
++   xsim <- sweep(sm, 2, xobs0-xobs,"-")
++   t3<-proc.time()   
++   fitmle <- ergm(model.f,
++               theta0=0.9*theta0.mle+0.1*fitmple$coef,
++               maxit=2,
++               algorithm.control=list(steplength=0.7, drop=FALSE),
++ #             parallel=2,
++ #             burnin=150000, MCMCsamplesize=5000, interval=10000
++               burnin=500000, MCMCsamplesize=5000, interval=2000
++              )
++   fitmle <- ergm(model.f,
++               theta0=fitmle$coef,
++               maxit=2,
++               algorithm.control=list(steplength=0.7, drop=FALSE),
++ #             burnin=150000, MCMCsamplesize=50000, interval=15000
++               burnin=500000, MCMCsamplesize=10000, interval=3000
++              )
++   t4<-proc.time()
++   times<-rbind(times,c(t2-t1,t4-t3))
++   ll <- llikratio(theta=fitmle$coef, theta0=theta0.mcmc, statsmatrix=sm)
++   lmv <- apply(fitmle$sample,2,mean)+xobs-xobs0
++   lmvse <- sqrt(diag(solve(fitmle$covar)))
++   mlese <- sqrt(diag(fitmle$covar))
++   mlemvcov<-cov(fitmle$sample)
++   mlemah<-ergm.mahalanobis(fitmle$coef,theta0.mle,fitmle$covar,inverted=F)
++   mlemvmah<-ergm.mahalanobis(lmv,xobs0,mlemvcov,inverted=F)
++ 
++   mplese <- sqrt(diag(fitmple$covar))
++   lmple<-fitmple$coef
++   llmple <- llikratio(theta=lmple, theta0=theta0.mcmc, statsmatrix=sm)
++   fit <- ergm(model.f,
++               theta0=lmple,
++               maxit=1,
++               algorithm.control=list(drop=FALSE),
++               parallel=2,
++               burnin=1500000, MCMCsamplesize=10000, interval=150,
++               estimate=FALSE
++              )
++   lmplemv <- apply(fit$sample,2,mean)+xobs-xobs0
++   lmplemvse <- sqrt(diag(solve(fitmple$covar)))
++   mplemvcov <- cov(fit$sample) 
++   mplemah <- ergm.mahalanobis(lmple, theta0.mle, fitmple$covar, inverted=F)
++   mplemvmah <- ergm.mahalanobis(lmplemv, xobs0, mplemvcov, inverted=F) 
++   if(all(xobs>0) & xobs["edges"] > 10){
++    lmle[i,,1] <- c(ll$llik-ll0$llik, fitmle$coef, mlese, lmv, lmvse, mlemah,
++                    mlemvmah, xobs, xobs0)
++   }
++   lmle[i,,2] <- c(llmple$llik-ll0$llik, lmple, mplese, lmplemv,
++                   lmplemvse, mplemah, mplemvmah, xobs, xobs0)
++   cat("\n")
++   print(paste("Simulation:",
++   paste(c(i,format(c(ll$llik,llmple$llik),digits=2)),collapse=" ")))
++  }else{
++   cat("\n")
++   print(paste("Simulation:",i,"degenerate",collapse=" "))
++  }
++ }
+                        edges gwesp.fixed.0.778126694491321 
+                     116.0000                      197.4374 
+            nodecov.seniority              nodecov.practice 
+                    4909.0000                      131.0000 
+           nodematch.practice              nodematch.gender 
+                      71.0000                       99.0000 
+             nodematch.office 
+                      83.0000 
+Iteration 1 of at most 2: the log-likelihood improved by 0.2395 
+Iteration 2 of at most 2: the log-likelihood improved by 0.09501 
+Iteration 1 of at most 2: the log-likelihood improved by 0.03244 
+Iteration 2 of at most 2: the log-likelihood improved by 0.05354 
+Iteration 1 of at most 1: 
+[1] "Simulation: 1 -0.31 -2.57"
+                        edges gwesp.fixed.0.778126694491321 
+                      88.0000                      124.9363 
+            nodecov.seniority              nodecov.practice 
+                    3602.0000                      110.0000 
+           nodematch.practice              nodematch.gender 
+                      58.0000                       73.0000 
+             nodematch.office 
+                      66.0000 
+Iteration 1 of at most 2: the log-likelihood improved by 2.031 
+Iteration 2 of at most 2: the log-likelihood improved by 1.086 
+Iteration 1 of at most 2: the log-likelihood improved by 0.7728 
+Iteration 2 of at most 2: the log-likelihood improved by 0.615 
+Iteration 1 of at most 1: 
+[1] "Simulation: 2 -1.0 -2.9"
+                        edges gwesp.fixed.0.778126694491321 
+                     113.0000                      184.8799 
+            nodecov.seniority              nodecov.practice 
+                    4702.0000                      109.0000 
+           nodematch.practice              nodematch.gender 
+                      70.0000                       92.0000 
+             nodematch.office 
+                      89.0000 
+Iteration 1 of at most 2: the log-likelihood improved by 0.08155 
+Iteration 2 of at most 2: the log-likelihood improved by 0.1366 
+Iteration 1 of at most 2: the log-likelihood improved by 0.1949 
+Iteration 2 of at most 2: the log-likelihood improved by 0.1622 
+Iteration 1 of at most 1: 
+[1] "Simulation: 3 -0.13 -4.47"
+                        edges gwesp.fixed.0.778126694491321 
+                     116.0000                      203.2574 
+            nodecov.seniority              nodecov.practice 
+                    4708.0000                      143.0000 
+           nodematch.practice              nodematch.gender 
+                      75.0000                      104.0000 
+             nodematch.office 
+                      84.0000 
+Iteration 1 of at most 2: the log-likelihood improved by 1.272 
+Iteration 2 of at most 2: the log-likelihood improved by 0.4581 
+Iteration 1 of at most 2: the log-likelihood improved by 0.3477 
+Iteration 2 of at most 2: the log-likelihood improved by 0.2796 
+Iteration 1 of at most 1: 
+[1] "Simulation: 4 -1.5 -6.3"
+                        edges gwesp.fixed.0.778126694491321 
+                      89.0000                      130.1558 
+            nodecov.seniority              nodecov.practice 
+                    3474.0000                      115.0000 
+           nodematch.practice              nodematch.gender 
+                      58.0000                       78.0000 
+             nodematch.office 
+                      63.0000 
+Iteration 1 of at most 2: the log-likelihood improved by 1.659 
+Iteration 2 of at most 2: the log-likelihood improved by 1.038 
+Iteration 1 of at most 2: the log-likelihood improved by 0.5919 
+Iteration 2 of at most 2: the log-likelihood improved by 0.4426 
+Iteration 1 of at most 1: 
+[1] "Simulation: 5 -0.76 -1.38"
+                        edges gwesp.fixed.0.778126694491321 
+                      130.000                       215.437 
+            nodecov.seniority              nodecov.practice 
+                     5338.000                       136.000 
+           nodematch.practice              nodematch.gender 
+                       92.000                       107.000 
+             nodematch.office 
+                       93.000 
+Iteration 1 of at most 2: the log-likelihood improved by 1.812 
+Iteration 2 of at most 2: the log-likelihood improved by 0.5473 
+Iteration 1 of at most 2: the log-likelihood improved by 0.5382 
+Iteration 2 of at most 2: the log-likelihood improved by 0.3163 
+Iteration 1 of at most 1: 
+[1] "Simulation: 6 -1.1 -1.5"
+                        edges gwesp.fixed.0.778126694491321 
+                     109.0000                      184.7589 
+            nodecov.seniority              nodecov.practice 
+                    4519.0000                      125.0000 
+           nodematch.practice              nodematch.gender 
+                      70.0000                       91.0000 
+             nodematch.office 
+                      79.0000 
+Iteration 1 of at most 2: the log-likelihood improved by 0.5592 
+Iteration 2 of at most 2: the log-likelihood improved by 0.1998 
+Iteration 1 of at most 2: the log-likelihood improved by 0.2955 
+Iteration 2 of at most 2: the log-likelihood improved by 0.5858 
+Iteration 1 of at most 1: 
+[1] "Simulation: 7 -0.74 -1.47"
+                        edges gwesp.fixed.0.778126694491321 
+                     139.0000                      244.5646 
+            nodecov.seniority              nodecov.practice 
+                    5678.0000                      154.0000 
+           nodematch.practice              nodematch.gender 
+                      93.0000                      119.0000 
+             nodematch.office 
+                     106.0000 
+Iteration 1 of at most 2: the log-likelihood improved by 2.322 
+Iteration 2 of at most 2: the log-likelihood improved by 1.189 
+Iteration 1 of at most 2: the log-likelihood improved by 1.129 
+Iteration 2 of at most 2: the log-likelihood improved by 0.5144 
+Iteration 1 of at most 1: 
+[1] "Simulation: 8 -1.2 -4.6"
+                        edges gwesp.fixed.0.778126694491321 
+                     120.0000                      208.9843 
+            nodecov.seniority              nodecov.practice 
+                    4788.0000                      137.0000 
+           nodematch.practice              nodematch.gender 
+                      73.0000                      102.0000 
+             nodematch.office 
+                      92.0000 
+Iteration 1 of at most 2: the log-likelihood improved by 0.9777 
+Iteration 2 of at most 2: the log-likelihood improved by 0.612 
+Iteration 1 of at most 2: the log-likelihood improved by 1.153 
+Iteration 2 of at most 2: the log-likelihood improved by 0.6196 
+Iteration 1 of at most 1: 
+[1] "Simulation: 9 -0.85 -6.01"
+                        edges gwesp.fixed.0.778126694491321 
+                     104.0000                      158.6712 
+            nodecov.seniority              nodecov.practice 
+                    4333.0000                      104.0000 
+           nodematch.practice              nodematch.gender 
+                      56.0000                       85.0000 
+             nodematch.office 
+                      82.0000 
+Iteration 1 of at most 2: the log-likelihood improved by 0.6044 
+Iteration 2 of at most 2: the log-likelihood improved by 0.1897 
+Iteration 1 of at most 2: the log-likelihood improved by 0.1276 
+Iteration 2 of at most 2: the log-likelihood improved by 0.07923 
+Iteration 1 of at most 1: 
+[1] "Simulation: 10 -0.95 -5.89"
+                        edges gwesp.fixed.0.778126694491321 
+                     115.0000                      188.6965 
+            nodecov.seniority              nodecov.practice 
+                    4800.0000                      123.0000 
+           nodematch.practice              nodematch.gender 
+                      76.0000                       92.0000 
+             nodematch.office 
+                      92.0000 
+Iteration 1 of at most 2: the log-likelihood improved by 0.3678 
+Iteration 2 of at most 2: the log-likelihood improved by 0.2169 
+Iteration 1 of at most 2: the log-likelihood improved by 0.05941 
+Iteration 2 of at most 2: the log-likelihood improved by 0.09303 
+Iteration 1 of at most 1: 
+[1] "Simulation: 11 -0.18 -3.65"
+                        edges gwesp.fixed.0.778126694491321 
+                      97.0000                      147.7598 
+            nodecov.seniority              nodecov.practice 
+                    3641.0000                      132.0000 
+           nodematch.practice              nodematch.gender 
+                      69.0000                       82.0000 
+             nodematch.office 
+                      72.0000 
+Iteration 1 of at most 2: the log-likelihood improved by 0.6001 
+Iteration 2 of at most 2: the log-likelihood improved by 0.4514 
+Iteration 1 of at most 2: the log-likelihood improved by 0.3384 
+Iteration 2 of at most 2: the log-likelihood improved by 0.2423 
+Iteration 1 of at most 1: 
+[1] "Simulation: 12  -0.88 -11.11"
+                        edges gwesp.fixed.0.778126694491321 
+                     136.0000                      241.6422 
+            nodecov.seniority              nodecov.practice 
+                    5625.0000                      137.0000 
+           nodematch.practice              nodematch.gender 
+                      83.0000                      121.0000 
+             nodematch.office 
+                     107.0000 
+Iteration 1 of at most 2: the log-likelihood improved by 2.513 
+Iteration 2 of at most 2: the log-likelihood improved by 1.466 
+Iteration 1 of at most 2: the log-likelihood improved by 1.36 
+Iteration 2 of at most 2: the log-likelihood improved by 0.4766 
+Iteration 1 of at most 1: 
+[1] "Simulation: 13 -0.79 -6.21"
+                        edges gwesp.fixed.0.778126694491321 
+                     115.0000                      189.0206 
+            nodecov.seniority              nodecov.practice 
+                    4638.0000                      117.0000 
+           nodematch.practice              nodematch.gender 
+                      74.0000                      101.0000 
+             nodematch.office 
+                      82.0000 
+Iteration 1 of at most 2: the log-likelihood improved by 0.2727 
+Iteration 2 of at most 2: the log-likelihood improved by 0.2095 
+Iteration 1 of at most 2: the log-likelihood improved by 0.1503 
+Iteration 2 of at most 2: the log-likelihood improved by 0.06973 
+Iteration 1 of at most 1: 
+[1] "Simulation: 14 -0.069 -8.520"
+                        edges gwesp.fixed.0.778126694491321 
+                     117.0000                      194.3991 
+            nodecov.seniority              nodecov.practice 
+                    4988.0000                      133.0000 
+           nodematch.practice              nodematch.gender 
+                      70.0000                       94.0000 
+             nodematch.office 
+                      84.0000 
+Iteration 1 of at most 2: the log-likelihood improved by 0.06971 
+Iteration 2 of at most 2: the log-likelihood improved by 0.1101 
+Iteration 1 of at most 2: the log-likelihood improved by 0.1398 
+Iteration 2 of at most 2: the log-likelihood improved by 0.0909 
+Iteration 1 of at most 1: 
+[1] "Simulation: 15 -0.086 -2.144"
+                        edges gwesp.fixed.0.778126694491321 
+                     108.0000                      177.8651 
+            nodecov.seniority              nodecov.practice 
+                    4502.0000                      131.0000 
+           nodematch.practice              nodematch.gender 
+                      59.0000                       95.0000 
+             nodematch.office 
+                      84.0000 
+Iteration 1 of at most 2: the log-likelihood improved by 0.2333 
+Iteration 2 of at most 2: the log-likelihood improved by 0.1961 
+Iteration 1 of at most 2: the log-likelihood improved by 0.277 
+Iteration 2 of at most 2: the log-likelihood improved by 0.24 
+Iteration 1 of at most 1: 
+[1] "Simulation: 16  -0.46 -14.94"
+                        edges gwesp.fixed.0.778126694491321 
+                      94.0000                      128.1446 
+            nodecov.seniority              nodecov.practice 
+                    3828.0000                      112.0000 
+           nodematch.practice              nodematch.gender 
+                      60.0000                       81.0000 
+             nodematch.office 
+                      64.0000 
+Iteration 1 of at most 2: the log-likelihood improved by 3.347 
+Iteration 2 of at most 2: the log-likelihood improved by 0.4252 
+Iteration 1 of at most 2: the log-likelihood improved by 0.286 
+Iteration 2 of at most 2: the log-likelihood improved by 0.2451 
+Iteration 1 of at most 1: 
+[1] "Simulation: 17 -2.3 -2.6"
+                        edges gwesp.fixed.0.778126694491321 
+                     121.0000                      205.6457 
+            nodecov.seniority              nodecov.practice 
+                    4773.0000                      135.0000 
+           nodematch.practice              nodematch.gender 
+                      80.0000                      105.0000 
+             nodematch.office 
+                      96.0000 
+Iteration 1 of at most 2: the log-likelihood improved by 0.5095 
+Iteration 2 of at most 2: the log-likelihood improved by 0.4092 
+Iteration 1 of at most 2: the log-likelihood improved by 0.3729 
+Iteration 2 of at most 2: the log-likelihood improved by 0.3356 
+Iteration 1 of at most 1: 
+[1] "Simulation: 18 -0.28 -5.96"
+                        edges gwesp.fixed.0.778126694491321 
+                     140.0000                      245.5481 
+            nodecov.seniority              nodecov.practice 
+                    5516.0000                      158.0000 
+           nodematch.practice              nodematch.gender 
+                      84.0000                      119.0000 
+             nodematch.office 
+                      97.0000 
+Iteration 1 of at most 2: the log-likelihood improved by 1.984 
+Iteration 2 of at most 2: the log-likelihood improved by 0.9876 
+Iteration 1 of at most 2: the log-likelihood improved by 0.7179 
+Iteration 2 of at most 2: the log-likelihood improved by 0.4245 
+Iteration 1 of at most 1: 
+[1] "Simulation: 19 -0.83 -5.40"
+                        edges gwesp.fixed.0.778126694491321 
+                      98.0000                      158.5616 
+            nodecov.seniority              nodecov.practice 
+                    4150.0000                      123.0000 
+           nodematch.practice              nodematch.gender 
+                      63.0000                       82.0000 
+             nodematch.office 
+                      72.0000 
+Iteration 1 of at most 2: the log-likelihood improved by 0.6211 
+Iteration 2 of at most 2: the log-likelihood improved by 0.9267 
+Iteration 1 of at most 2: the log-likelihood improved by 0.7583 
+Iteration 2 of at most 2: the log-likelihood improved by 0.6406 
+Iteration 1 of at most 1: 
+[1] "Simulation: 20 -0.38 -5.18"
+> save(theta0.mle, lmle, file="lazega.mle.new.RData")
+> print(apply(times,2,mean))
+ user.self   sys.self    elapsed user.child  sys.child  user.self   sys.self 
+   0.01365    0.00195    0.01760    0.00000    0.00000  358.87010    0.89615 
+   elapsed user.child  sys.child 
+ 370.88170    0.00000    0.00000 
+> 
+> proc.time()
+    user   system  elapsed 
+7398.252   19.378 7647.291 
