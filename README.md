@@ -13,3 +13,9 @@ In this paper, we present methodology to enable estimators of ERG model paramete
 The results clearly show the superiority of the likelihood-based estimators over those based on pseudo-likelihood, with the bias-reduced pseudo-likelihood outperforming the general pseudo-likelihood. The use of the mean value parameterization provides insight into the differences between the estimators and when these differences will matter in practice.
 
 Included is the version of the **ergm** package used. It has been slightly modified to work with R 4.0.
+
+The core function is **lazegamlesim.r**. When run it should produce **lazegamlesim.r.Rout**.
+
+This code can be modified to work with current versions of **ergm**.
+
+Good luck.
